@@ -1,9 +1,10 @@
 import { Router } from "express";
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { requireAuth, supabaseAdmin } from "./auth.js";
 
 const router = Router();
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 router.post("/", requireAuth, async (req, res) => {
   const { resume_id, job_description, source_url, company, title } = req.body;
@@ -11,7 +12,6 @@ router.post("/", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "resume_id and job_description are required" });
   }
 
-  // 1. Enforce the user's plan limit BEFORE spending an AI call.
   const { data: profile, error: profileErr } = await supabaseAdmin
     .from("profiles")
     .select("applications_used_this_period, applications_limit, subscription_status")
@@ -26,7 +26,6 @@ router.post("/", requireAuth, async (req, res) => {
     });
   }
 
-  // 2. Fetch the resume text.
   const { data: resume, error: resumeErr } = await supabaseAdmin
     .from("resumes")
     .select("raw_text")
@@ -36,7 +35,6 @@ router.post("/", requireAuth, async (req, res) => {
 
   if (resumeErr || !resume) return res.status(404).json({ error: "Resume not found" });
 
-  // 3. Create the job_target row.
   const { data: jobTarget, error: jobErr } = await supabaseAdmin
     .from("job_targets")
     .insert({
@@ -52,7 +50,6 @@ router.post("/", requireAuth, async (req, res) => {
 
   if (jobErr) return res.status(500).json({ error: jobErr.message });
 
-  // 4. Call Claude to tailor the resume + write a cover letter.
   const prompt = `You are a resume tailoring assistant. Given a candidate's resume text and a target job description, produce:
 1. Four to six tailored resume bullet points (rewritten to match the job's language and priorities, based only on real experience in the resume — never invent experience).
 2. A full three-paragraph cover letter tailored to this role.
@@ -69,19 +66,14 @@ Respond ONLY as JSON, no markdown, no preamble, with this exact shape:
 
   let parsed;
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 1500,
-      messages: [{ role: "user", content: prompt }],
-    });
-    const text = response.content.map((b) => b.text || "").join("\n");
-    parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    parsed = JSON.parse(text.replace(/json|/g, "").trim());
   } catch (err) {
-    console.error("Anthropic error:", err);
+    console.error("Gemini error:", err);
     return res.status(502).json({ error: "AI tailoring failed. Try again." });
   }
 
-  // 5. Store the result.
   const { data: tailored, error: tailoredErr } = await supabaseAdmin
     .from("tailored_applications")
     .insert({
@@ -97,7 +89,6 @@ Respond ONLY as JSON, no markdown, no preamble, with this exact shape:
 
   if (tailoredErr) return res.status(500).json({ error: tailoredErr.message });
 
-  // 6. Increment usage.
   await supabaseAdmin
     .from("profiles")
     .update({ applications_used_this_period: profile.applications_used_this_period + 1 })
