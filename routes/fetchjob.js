@@ -25,7 +25,7 @@ router.post("/", requireAuth, async (req, res) => {
 
     if (!response.ok) {
       return res.status(502).json({
-        error: That site returned an error (status ${response.status}). Try pasting the description manually.,
+        error: 'That site returned an error (status ${response.status}). Try pasting the description manually.',
       });
     }
 
