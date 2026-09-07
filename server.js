@@ -25,4 +25,4 @@ app.use("/api/fetch-job", fetchJobRouter);
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(Moonshift API listening on port ${port}));
+app.listen(port, () => console.log('Moonshift API listening on port ${port}'));
