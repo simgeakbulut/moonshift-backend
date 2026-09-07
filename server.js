@@ -1,0 +1,27 @@
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+
+import resumesRouter from "./routes/resumes.js";
+import tailorRouter from "./routes/tailor.js";
+import billingRouter, { handleStripeWebhook } from "./routes/billing.js";
+import queueRouter from "./routes/queue.js";
+
+const app = express();
+
+app.use(cors({ origin: process.env.CLIENT_URL }));
+
+// Stripe webhook needs the raw body — must be registered BEFORE express.json()
+app.post("/api/billing/webhook", express.raw({ type: "application/json" }), handleStripeWebhook);
+
+app.use(express.json());
+
+app.use("/api/resumes", resumesRouter);
+app.use("/api/tailor", tailorRouter);
+app.use("/api/billing", billingRouter);
+app.use("/api/queue", queueRouter);
+
+app.get("/health", (req, res) => res.json({ ok: true }));
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log(`Moonshift API listening on port ${port}`));
