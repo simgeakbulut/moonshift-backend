@@ -4,7 +4,7 @@ import { requireAuth, supabaseAdmin } from "./auth.js";
 
 const router = Router();
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
 
 router.post("/", requireAuth, async (req, res) => {
   const { resume_id, job_description, source_url, company, title } = req.body;
